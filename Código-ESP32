@@ -1,0 +1,149 @@
+#define BLYNK_IGNORE_INVALID_TEMPLATE // Desactiva la verificación de plantilla
+
+// AQUÍ VAS A COLOCAR LOS DATOS DEL BLYNK
+#define BLYNK_TEMPLATE_ID "TMPL29eEsZv3e"
+#define BLYNK_TEMPLATE_NAME "IOTRIEGO"
+#define BLYNK_AUTH_TOKEN "AO8csbj4pniI3cydg_xw3rBIRwB4GIfQ"
+
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <DHT.h>
+#include <HTTPClient.h>
+
+#define DHTPIN 2 // Pin donde está conectado el sensor DHT11
+DHT dht(DHTPIN, DHT11);
+
+#define NUM_SENSORS 10 // Número de sensores de humedad de suelo
+int sensorPins[NUM_SENSORS] = {15, 16, 17, 27, 22, 21, 18, 5, 19, 26}; // Pines de los sensores
+
+int relay = 4; // Pin del relé
+
+BlynkTimer timer;
+
+// Enter your Auth token
+char auth[] = "AO8csbj4pniI3cydg_xw3rBIRwB4GIfQ";
+// AQUÍ SE CAMBIA LA CONTRASEÑA                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+char ssid[] = "DIEGO-2211";  // NOMBRE DE LA RED WIFI
+char pass[] = "luchoerika-2311"; // CONTRASEÑA DEL WIFI
+
+// Variable para rastrear la acción manual del usuario
+bool manualControl = false;
+
+// Tiempo en milisegundos para dar prioridad a la acción manual (por ejemplo, 5 minutos)
+unsigned long manualControlTimeout = 5 * 60 * 1000; // 5 minutos
+
+const char* azureEndpoint = "https://sistema-ayunt.eastus.inference.ml.azure.com/";
+const char* azureKey = "aYOVnOsuEUd5NfhhmZCb5LUW4Zl7eqF3";
+
+void setup() {
+  Serial.begin(115200);
+  Blynk.begin(auth, ssid, pass, "blynk.cloud", 80);
+  pinMode(relay, OUTPUT);
+  digitalWrite(relay, HIGH);
+  dht.begin();
+}
+
+void sendToAzure(float temperature, float humidity, int sensorValues[NUM_SENSORS]) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(azureEndpoint);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", String("Bearer ") + azureKey);
+
+    String jsonPayload = "{ \"temperature\": " + String(temperature) + ", \"humidity\": " + String(humidity) + ", \"sensorValues\": [";
+    for (int i = 0; i < NUM_SENSORS; i++) {
+      jsonPayload += String(sensorValues[i]);
+      if (i < NUM_SENSORS - 1) jsonPayload += ",";
+    }
+    jsonPayload += "] }";
+
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("HTTP Response code: " + String(httpResponseCode));
+      Serial.println("Response from Azure: " + response);
+
+      // Aquí puedes analizar la respuesta y tomar decisiones
+      // Ejemplo: si la respuesta es "true", activa el relé
+      if (response == "true") {
+        digitalWrite(relay, LOW); // Activa el relé
+      } else {
+        digitalWrite(relay, HIGH); // Desactiva el relé
+      }
+    } else {
+      Serial.println("Error in sending data to Azure");
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected");
+  }
+}
+
+void soilMoisture() {
+  if (manualControl || (millis() < manualControlTimeout)) {
+    // Realiza la acción manual y deshabilita la automatización basada en sensores
+    digitalWrite(relay, HIGH); // Mantén la válvula abierta
+  } else {
+    int totalValue = 0;
+    int sensorValues[NUM_SENSORS];
+    for (int i = 0; i < NUM_SENSORS; i++) {
+      int value = analogRead(sensorPins[i]);
+      value = map(value, 0, 4095, 0, 100);
+      value = (value - 100) * -1;
+      sensorValues[i] = value;
+      totalValue += value;
+
+      // Enviar el valor individual del sensor al servidor Blynk
+      Blynk.virtualWrite(V4 + i, value);
+    }
+  
+    int averageValue = totalValue / NUM_SENSORS;
+  
+    Blynk.virtualWrite(V0, averageValue);
+    Serial.println(averageValue);
+
+    // Verifica si el valor promedio de los sensores de humedad es mayor al 20%
+    if (averageValue > 20) {
+      digitalWrite(relay, LOW); // Activa el relé
+    } else {
+      digitalWrite(relay, HIGH); // Desactiva el relé
+    }
+
+    // Leer la temperatura y la humedad del sensor DHT11
+    float temperature = dht.readTemperature();
+    float humidity = dht.readHumidity();
+  
+    // Verifica si los valores son válidos (a veces el DHT11 devuelve datos inválidos)
+    if (!isnan(temperature) && !isnan(humidity)) {
+      Blynk.virtualWrite(V2, temperature); // TEMPERATURA en V2
+      Blynk.virtualWrite(V3, humidity);    // HUMEDAD en V3
+    }
+
+    // Enviar datos a Azure y recibir predicción
+    sendToAzure(temperature, humidity, sensorValues);
+  }
+}
+
+BLYNK_WRITE(V1) {
+  bool Relay = param.asInt();
+  if (Relay == 1) {
+    digitalWrite(relay, HIGH); // Acción manual: Abre la válvula
+    // Habilita la acción manual y establece un temporizador
+    manualControl = true;
+    manualControlTimeout = millis() + 5 * 60 * 1000; // 5 minutos
+  } else {
+    digitalWrite(relay, LOW); // Acción manual: Cierra la válvula
+    // Habilita la acción manual y establece un temporizador
+    manualControl = true;
+    manualControlTimeout = millis() + 5 * 60 * 1000; // 5 minutos
+  }
+}
+
+void loop() {
+  soilMoisture();
+  Blynk.run();
+  delay(200);
+}
