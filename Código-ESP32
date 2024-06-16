@@ -1,9 +1,9 @@
 #define BLYNK_IGNORE_INVALID_TEMPLATE // Desactiva la verificación de plantilla
 
 // AQUÍ VAS A COLOCAR LOS DATOS DEL BLYNK
-#define BLYNK_TEMPLATE_ID "TMPL29eEsZv3e"
-#define BLYNK_TEMPLATE_NAME "IOTRIEGO"
-#define BLYNK_AUTH_TOKEN "AO8csbj4pniI3cydg_xw3rBIRwB4GIfQ"
+#define BLYNK_TEMPLATE_ID "TMPL2ktFo1ZRZ"
+#define BLYNK_TEMPLATE_NAME "Sistema"
+#define BLYNK_AUTH_TOKEN "zO7KnheVDfQPVSjLltM5Crqi5qbZ1kjP"
 
 #include <Wire.h>
 #include <WiFiClient.h>
@@ -22,7 +22,7 @@ int relay = 4; // Pin del relé
 BlynkTimer timer;
 
 // Enter your Auth token
-char auth[] = "AO8csbj4pniI3cydg_xw3rBIRwB4GIfQ";
+char auth[] = "zO7KnheVDfQPVSjLltM5Crqi5qbZ1kjP";
 // AQUÍ SE CAMBIA LA CONTRASEÑA                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 char ssid[] = "DIEGO-2211";  // NOMBRE DE LA RED WIFI
 char pass[] = "luchoerika-2311"; // CONTRASEÑA DEL WIFI
